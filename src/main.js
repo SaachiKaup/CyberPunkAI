@@ -5,7 +5,7 @@ import { BattleScene } from './BattleScene.js';
 const config = {
   type: Phaser.AUTO,
   width: 900,
-  height: 700,
+  height: 710,
   backgroundColor: '#0a0e27',
   parent: 'game-container',
   scene: [MenuScene, BattleScene],

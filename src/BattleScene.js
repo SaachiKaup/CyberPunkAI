@@ -112,15 +112,6 @@ export class BattleScene extends Phaser.Scene {
       stroke: '#ff00ff',
       strokeThickness: 6
     }).setOrigin(0.5);
-
-    // Add glowing effect to title
-    this.add.text(450, 35, 'PROMPT BATTLE ARENA', {
-      fontSize: '48px',
-      fontFamily: 'Orbitron',
-      fontStyle: '900',
-      color: '#00ffff',
-      alpha: 0.3
-    }).setOrigin(0.5).setScale(1.05);
   }
 
   setupMonsters() {
@@ -224,23 +215,23 @@ export class BattleScene extends Phaser.Scene {
     // Player health bar - cyberpunk style
     this.playerHealthBarBg = this.add.rectangle(230, 410, 220, 26, 0x1a1a3e).setOrigin(0.5);
     this.playerHealthBarBg.setStrokeStyle(2, 0x00ffff, 0.8);
-    this.playerHealthBar = this.add.rectangle(230, 410, 220, 26, 0x00ff00).setOrigin(0.5);
+    this.playerHealthBar = this.add.rectangle(230, 410, 220, 26, 0x00ffff).setOrigin(0.5);
     this.playerHealthText = this.add.text(230, 410, `${this.playerMonster.hp}/${this.playerMonster.maxHP}`, {
       fontSize: '20px',
       fontFamily: 'Orbitron',
       fontStyle: 'bold',
-      color: '#00ffff'
+      color: '#000000'
     }).setOrigin(0.5);
 
     // Opponent health bar - cyberpunk style
     this.opponentHealthBarBg = this.add.rectangle(670, 410, 220, 26, 0x1a1a3e).setOrigin(0.5);
     this.opponentHealthBarBg.setStrokeStyle(2, 0xff00ff, 0.8);
-    this.opponentHealthBar = this.add.rectangle(670, 410, 220, 26, 0x00ff00).setOrigin(0.5);
+    this.opponentHealthBar = this.add.rectangle(670, 410, 220, 26, 0x00ffff).setOrigin(0.5);
     this.opponentHealthText = this.add.text(670, 410, `${this.opponentMonster.hp}/${this.opponentMonster.maxHP}`, {
       fontSize: '20px',
       fontFamily: 'Orbitron',
       fontStyle: 'bold',
-      color: '#ff00ff'
+      color: '#000000'
     }).setOrigin(0.5);
   }
 
@@ -497,9 +488,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   getHealthColor(percent) {
-    if (percent > 0.6) return 0x00ff00; // Green
-    if (percent > 0.3) return 0xffff00; // Yellow
-    return 0xff0000; // Red
+    if (percent > 0.6) return 0x00ffff; // Cyan - high health
+    if (percent > 0.3) return 0xff00ff; // Magenta - medium health
+    return 0xff0066; // Hot pink - low health
   }
 
   updateAbilityButtons() {

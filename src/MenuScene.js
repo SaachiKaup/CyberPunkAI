@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { MONSTERS } from './MonsterData.js';
 import { SpriteGenerator } from './SpriteGenerator.js';
+import { ThreeBackground } from './ThreeBackground.js';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -8,24 +9,27 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
-    // Cyberpunk background
+    // Setup Three.js background
+    this.setupBackground();
+
+    // Semi-transparent overlay for better text readability
     const graphics = this.add.graphics();
-    graphics.fillGradientStyle(0x0a0e27, 0x0a0e27, 0x1a1a3e, 0x1a1a3e, 1);
-    graphics.fillRect(0, 0, 900, 700);
+    graphics.fillStyle(0x0a0e27, 0.3);
+    graphics.fillRect(0, 0, 900, 710);
 
     // Add cyberpunk grid
     const grid = this.add.graphics();
     grid.lineStyle(1, 0x00ffff, 0.15);
     for (let i = 0; i < 900; i += 60) {
-      grid.lineBetween(i, 0, i, 700);
+      grid.lineBetween(i, 0, i, 710);
     }
-    for (let i = 0; i < 700; i += 60) {
+    for (let i = 0; i < 710; i += 60) {
       grid.lineBetween(0, i, 900, i);
     }
 
     // Neon lines
     this.add.rectangle(0, 80, 900, 2, 0xff00ff, 0.8);
-    this.add.rectangle(0, 670, 900, 2, 0x00ffff, 0.8);
+    this.add.rectangle(0, 680, 900, 2, 0x00ffff, 0.8);
 
     // Cyberpunk city silhouette
     const buildings = this.add.graphics();
@@ -55,15 +59,6 @@ export class MenuScene extends Phaser.Scene {
       stroke: '#ff00ff',
       strokeThickness: 6
     }).setOrigin(0.5);
-
-    // Add glowing effect to title
-    this.add.text(450, 110, 'PROMPT BATTLE ARENA', {
-      fontSize: '52px',
-      fontFamily: 'Orbitron',
-      fontStyle: '900',
-      color: '#00ffff',
-      alpha: 0.3
-    }).setOrigin(0.5).setScale(1.05);
 
     // Subtitle with pulsing effect
     const subtitle = this.add.text(450, 180, 'AI-Powered Monster Combat', {
@@ -100,7 +95,7 @@ export class MenuScene extends Phaser.Scene {
     monsterTypes.forEach((type, index) => {
       const monster = MONSTERS[type];
       const x = startX + (index * spacing);
-      const y = 390;
+      const y = 430;
 
       // Create pixel art sprite for menu
       const spriteKey = SpriteGenerator.generateMonsterSprite(this, type, 128);
@@ -177,21 +172,39 @@ export class MenuScene extends Phaser.Scene {
     });
 
     // Game info with cyberpunk colors
-    this.add.text(450, 620, 'Best of 3 Rounds • AI-Generated Opponents', {
-      fontSize: '17px',
+    this.add.text(450, 650, 'Best of 3 Rounds • AI-Generated Opponents', {
+      fontSize: '22px',
       fontFamily: 'Orbitron',
       color: '#00ffff',
       align: 'center'
     }).setOrigin(0.5);
 
     // Credits
-    this.add.text(450, 655, 'Built with DigitalOcean Gradient AI Platform & Phaser 3', {
-      fontSize: '13px',
+    this.add.text(450, 685, 'Built with DigitalOcean Gradient AI Platform & Phaser 3', {
+      fontSize: '16px',
       fontFamily: 'Orbitron',
       color: '#ff00ff'
     }).setOrigin(0.5);
   }
 
+  setupBackground() {
+    // Create or reuse Three.js background canvas
+    let threeCanvas = document.getElementById('three-background');
+
+    if (!threeCanvas) {
+      threeCanvas = document.createElement('canvas');
+      threeCanvas.id = 'three-background';
+      threeCanvas.style.position = 'fixed';
+      threeCanvas.style.top = '0';
+      threeCanvas.style.left = '0';
+      threeCanvas.style.width = '100vw';
+      threeCanvas.style.height = '100vh';
+      threeCanvas.style.zIndex = '0';
+      document.body.insertBefore(threeCanvas, document.body.firstChild);
+    }
+
+    this.threeBackground = new ThreeBackground(threeCanvas);
+  }
 
   startBattle(playerMonster) {
     // Randomly select opponent monster (different from player's choice)
@@ -203,5 +216,13 @@ export class MenuScene extends Phaser.Scene {
       playerMonster: playerMonster,
       opponentMonster: opponentMonster
     });
+  }
+
+  shutdown() {
+    // Clean up Three.js background when leaving menu
+    if (this.threeBackground) {
+      this.threeBackground.destroy();
+      this.threeBackground = null;
+    }
   }
 }
