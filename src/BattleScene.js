@@ -260,13 +260,13 @@ export class BattleScene extends Phaser.Scene {
       const y = 610;
 
       // Button background - cyberpunk style
-      const button = this.add.rectangle(x, y, 320, 70, 0x1a1a3e)
+      const button = this.add.rectangle(x, y, 320, 85, 0x1a1a3e)
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
         .setStrokeStyle(3, 0x00ffff, 0.9);
 
       // Button glow
-      const buttonGlow = this.add.rectangle(x, y, 315, 65, 0x00ffff, 0.1).setOrigin(0.5);
+      const buttonGlow = this.add.rectangle(x, y, 315, 80, 0x00ffff, 0.1).setOrigin(0.5);
 
       // Button text
       const text = this.add.text(x, y - 12, ability.name, {
