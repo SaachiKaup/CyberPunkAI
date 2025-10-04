@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(npm install)",
+      "Bash(npm run dev:*)",
+      "WebFetch(domain:zoazeihbe54bgbw7kf34xwsq.agents.do-ai.run)",
+      "Bash(curl -X POST https://zoazeihbe54bgbw7kf34xwsq.agents.do-ai.run -H \"Content-Type: application/json\" -d '{\"\"type\"\": \"\"generate_monster\"\"}')",
+      "Bash(curl -X GET https://zoazeihbe54bgbw7kf34xwsq.agents.do-ai.run)",
+      "Bash(curl https://zoazeihbe54bgbw7kf34xwsq.agents.do-ai.run/openapi.json)",
+      "Bash(curl -X POST https://zoazeihbe54bgbw7kf34xwsq.agents.do-ai.run/api/v1/chat/completions )",
+      "Bash(npm run dev:all:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

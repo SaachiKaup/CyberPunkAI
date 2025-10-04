@@ -1,0 +1,26 @@
+{
+  "name": "prompt-battle-arena",
+  "version": "1.0.0",
+  "description": "AI-powered monster battle game built for DigitalOcean Hacktoberfest 2025",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "node server.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": ["game", "ai", "phaser", "gradient-ai"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "phaser": "^3.80.1",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "three": "^0.159.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "concurrently": "^8.2.2"
+  }
+}

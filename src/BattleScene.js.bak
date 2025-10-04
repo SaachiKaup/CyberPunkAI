@@ -1,0 +1,832 @@
+import Phaser from 'phaser';
+import { MONSTERS, createMonster, getRandomPersonality, generateAIMonster } from './MonsterData.js';
+import { AIOpponent } from './AIOpponent.js';
+import { ThreeBackground } from './ThreeBackground.js';
+import { SpriteGenerator } from './SpriteGenerator.js';
+
+export class BattleScene extends Phaser.Scene {
+  constructor() {
+    super({ key: 'BattleScene' });
+    this.aiOpponent = new AIOpponent();
+  }
+
+  init(data) {
+    this.playerMonsterType = data.playerMonster || 'STRIKER';
+    this.opponentMonsterType = data.opponentMonster || 'TANK';
+  }
+
+  async create() {
+    // Show loading text
+    const loadingText = this.add.text(450, 350, 'Generating AI Opponent...', {
+      fontSize: '28px',
+      fontFamily: 'Orbitron',
+      color: '#00ffff'
+    }).setOrigin(0.5);
+
+    // Initialize game state - Generate AI opponent
+    this.playerMonster = createMonster(this.playerMonsterType);
+
+    // Try to generate AI opponent, fallback to template if it fails
+    const aiOpponentData = await generateAIMonster(this.opponentMonsterType);
+    this.opponentMonster = {
+      ...aiOpponentData,
+      hp: aiOpponentData.maxHP,
+      activeBlock: 0,
+      stunned: false
+    };
+
+    this.opponentPersonality = getRandomPersonality();
+
+    // Remove loading text
+    loadingText.destroy();
+
+    this.roundsWon = { player: 0, opponent: 0 };
+    this.turnNumber = 0;
+    this.cooldowns = { player: {}, opponent: {} };
+    this.playerLastMove = null;
+    this.isPlayerTurn = true;
+    this.waitingForAnimation = false;
+
+    // Setup UI
+    this.setupBackground();
+    this.setupMonsters();
+    this.setupHealthBars();
+    this.setupNarrationBox();
+    this.setupAbilityButtons();
+    this.setupRoundCounter();
+
+    // Show battle intro
+    this.showBattleIntro();
+  }
+
+  setupBackground() {
+    // Create Three.js canvas for background
+    const threeCanvas = document.createElement('canvas');
+    threeCanvas.id = 'three-background';
+    threeCanvas.style.position = 'absolute';
+    threeCanvas.style.top = '0';
+    threeCanvas.style.left = '0';
+    threeCanvas.style.zIndex = '0';
+
+    // Insert before Phaser canvas
+    const gameCanvas = this.game.canvas;
+    gameCanvas.parentElement.insertBefore(threeCanvas, gameCanvas);
+    gameCanvas.style.position = 'relative';
+    gameCanvas.style.zIndex = '1';
+
+    // Initialize Three.js background
+    this.threeBackground = new ThreeBackground(threeCanvas);
+
+    // Add semi-transparent overlay for better text visibility
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x0a0e27, 0.3);
+    overlay.fillRect(0, 0, 900, 700);
+
+    // Battle platform with neon edges
+    const platform = this.add.graphics();
+    platform.fillStyle(0x1a1a3e, 0.5);
+    platform.fillRect(100, 550, 700, 10);
+    platform.lineStyle(3, 0xff00ff, 0.8);
+    platform.strokeRect(100, 550, 700, 10);
+
+    // Add glowing platform effect
+    const platformGlow = this.add.rectangle(450, 555, 700, 10, 0xff00ff, 0.2);
+    this.tweens.add({
+      targets: platformGlow,
+      alpha: 0.4,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1
+    });
+
+    // Title with cyberpunk style
+    this.add.text(450, 35, 'PROMPT BATTLE ARENA', {
+      fontSize: '36px',
+      fontFamily: 'Orbitron',
+      fontStyle: '900',
+      color: '#00ffff',
+      stroke: '#ff00ff',
+      strokeThickness: 5
+    }).setOrigin(0.5);
+
+    // Add glowing effect to title
+    this.add.text(450, 35, 'PROMPT BATTLE ARENA', {
+      fontSize: '36px',
+      fontFamily: 'Orbitron',
+      fontStyle: '900',
+      color: '#00ffff',
+      alpha: 0.3
+    }).setOrigin(0.5).setScale(1.05);
+  }
+
+  setupMonsters() {
+    // Generate sprite textures
+    const playerSpriteKey = SpriteGenerator.generateMonsterSprite(this, this.playerMonster.type, 128);
+    const opponentSpriteKey = SpriteGenerator.generateMonsterSprite(this, this.opponentMonster.type, 128);
+
+    // Player monster (left side) - Sprite-based
+    this.playerSprite = this.add.sprite(230, 280, playerSpriteKey);
+    this.playerSprite.setScale(2);
+    this.playerSprite.setTint(0xffffff);
+
+    // Add glow effect to player
+    const playerGlow = this.add.sprite(230, 280, playerSpriteKey);
+    playerGlow.setScale(2.2);
+    playerGlow.setTint(this.playerMonster.color);
+    playerGlow.setAlpha(0.3);
+    playerGlow.setDepth(-1);
+
+    // Opponent monster (right side) - Sprite-based
+    this.opponentSprite = this.add.sprite(670, 280, opponentSpriteKey);
+    this.opponentSprite.setScale(2);
+    this.opponentSprite.setFlipX(true);
+    this.opponentSprite.setTint(0xffffff);
+
+    // Add glow effect to opponent
+    const opponentGlow = this.add.sprite(670, 280, opponentSpriteKey);
+    opponentGlow.setScale(2.2);
+    opponentGlow.setFlipX(true);
+    opponentGlow.setTint(this.opponentMonster.color);
+    opponentGlow.setAlpha(0.3);
+    opponentGlow.setDepth(-1);
+
+    // Store glow references for animations
+    this.playerGlow = playerGlow;
+    this.opponentGlow = opponentGlow;
+
+    // Idle animation - floating effect
+    this.tweens.add({
+      targets: [this.playerSprite, playerGlow],
+      y: '+=10',
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    this.tweens.add({
+      targets: [this.opponentSprite, opponentGlow],
+      y: '+=10',
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      delay: 750
+    });
+
+    // Labels
+    const playerLabelText = `Your ${this.playerMonster.type}`;
+    this.playerLabel = this.add.text(230, 380, playerLabelText, {
+      fontSize: '18px',
+      fontFamily: 'Orbitron',
+      fontStyle: 'bold',
+      color: '#00ffff',
+      stroke: '#000000',
+      strokeThickness: 4
+    }).setOrigin(0.5);
+
+    const opponentLabelText = `${this.opponentMonster.name}${this.opponentMonster.aiGenerated ? ' ✨' : ''}`;
+    this.opponentLabel = this.add.text(670, 380, opponentLabelText, {
+      fontSize: '18px',
+      fontFamily: 'Orbitron',
+      fontStyle: 'bold',
+      color: this.opponentMonster.aiGenerated ? '#ffaa00' : '#00ffff',
+      stroke: '#000000',
+      strokeThickness: 4
+    }).setOrigin(0.5);
+
+    // VS text - Cyberpunk style
+    const vsText = this.add.text(450, 280, 'VS', {
+      fontSize: '50px',
+      fontFamily: 'Orbitron',
+      fontStyle: '900',
+      color: '#00ffff',
+      stroke: '#ff00ff',
+      strokeThickness: 5
+    }).setOrigin(0.5);
+
+    // Add pulsing glow to VS text
+    this.tweens.add({
+      targets: vsText,
+      alpha: 0.5,
+      duration: 800,
+      yoyo: true,
+      repeat: -1
+    });
+  }
+
+  createPokemonAvatar(x, y, monster, isPlayer) {
+    // Shadow - retro style
+    this.add.ellipse(x, y + 90, 120, 25, 0x000000, 0.4);
+
+    // Outer glow with neon color
+    const outerGlow = this.add.graphics();
+    outerGlow.fillStyle(monster.color, 0.2);
+    outerGlow.fillRoundedRect(x - 75, y - 80, 150, 160, 20);
+
+    let body;
+
+    if (monster.type === 'STRIKER') {
+      // Fire dragon creature - Pokemon-like with rounded design
+      body = this.add.graphics();
+      body.fillStyle(monster.color);
+      // Rounder body
+      body.fillEllipse(x, y, 80, 95);
+      body.lineStyle(4, 0x000000, 1);
+      body.strokeEllipse(x, y, 80, 95);
+
+      // Belly - larger and more defined
+      const belly = this.add.graphics();
+      belly.fillStyle(0xffcc88);
+      belly.fillEllipse(x, y + 12, 52, 62);
+      belly.lineStyle(3, 0x000000);
+      belly.strokeEllipse(x, y + 12, 52, 62);
+
+      // Cute rounded horns
+      this.add.circle(x - 32, y - 55, 12, 0xffaa44).setStrokeStyle(4, 0x000000);
+      this.add.circle(x + 32, y - 55, 12, 0xffaa44).setStrokeStyle(4, 0x000000);
+
+      // Flame tail - more stylized
+      const flame = this.add.graphics();
+      flame.fillStyle(0xffcc00);
+      flame.beginPath();
+      flame.arc(x + 70, y + 12, 20, Math.PI * 0.8, Math.PI * 2.2);
+      flame.closePath();
+      flame.fillPath();
+      flame.lineStyle(4, 0x000000);
+      flame.strokePath();
+
+      // Cute rounded arms
+      this.add.circle(x - 58, y, 20, 0xff7755).setStrokeStyle(4, 0x000000);
+      this.add.circle(x + 58, y, 20, 0xff7755).setStrokeStyle(4, 0x000000);
+
+      // Little feet
+      this.add.ellipse(x - 26, y + 58, 24, 18, 0xff6644).setStrokeStyle(4, 0x000000);
+      this.add.ellipse(x + 26, y + 58, 24, 18, 0xff6644).setStrokeStyle(4, 0x000000);
+
+    } else if (monster.type === 'TANK') {
+      // Turtle/armored creature - more Pokemon-like
+      // Round shell
+      const shell = this.add.graphics();
+      shell.fillStyle(0x666666);
+      shell.fillCircle(x, y + 6, 62);
+      shell.lineStyle(4, 0x000000);
+      shell.strokeCircle(x, y + 6, 62);
+
+      // Shell pattern - hexagons
+      const pattern = this.add.graphics();
+      pattern.lineStyle(4, 0x444444);
+      pattern.strokeCircle(x, y - 6, 28);
+      pattern.strokeCircle(x - 30, y + 18, 20);
+      pattern.strokeCircle(x + 30, y + 18, 20);
+
+      // Cute rounded head
+      this.add.circle(x, y - 48, 34, monster.color).setStrokeStyle(4, 0x000000);
+
+      // Helmet visor
+      this.add.rectangle(x, y - 58, 62, 18, 0x444444).setStrokeStyle(4, 0x000000);
+
+      // Round shield arms
+      this.add.circle(x - 62, y, 26, 0x777777).setStrokeStyle(4, 0x000000);
+      this.add.circle(x + 62, y, 26, 0x777777).setStrokeStyle(4, 0x000000);
+
+      // Cute feet
+      this.add.ellipse(x - 28, y + 58, 26, 20, monster.color).setStrokeStyle(4, 0x000000);
+      this.add.ellipse(x + 28, y + 58, 26, 20, monster.color).setStrokeStyle(4, 0x000000);
+
+    } else if (monster.type === 'SPEEDSTER') {
+      // Electric creature - more Pokemon-like (Pikachu-inspired)
+      // Round body
+      this.add.circle(x, y + 6, 48, monster.color).setStrokeStyle(4, 0x000000);
+
+      // White belly
+      this.add.ellipse(x, y + 18, 40, 46, 0xffffdd).setStrokeStyle(4, 0x000000);
+
+      // Lightning bolt pattern on belly
+      const bolt = this.add.graphics();
+      bolt.fillStyle(0xffaa00);
+      bolt.beginPath();
+      bolt.moveTo(x, y);
+      bolt.lineTo(x - 12, y + 14);
+      bolt.lineTo(x - 4, y + 18);
+      bolt.lineTo(x - 10, y + 32);
+      bolt.lineTo(x + 4, y + 20);
+      bolt.lineTo(x, y + 14);
+      bolt.closePath();
+      bolt.fillPath();
+      bolt.lineStyle(3, 0x000000);
+      bolt.strokePath();
+
+      // Cute pointy ears
+      const ear1 = this.add.graphics();
+      ear1.fillStyle(0xffff33);
+      ear1.fillTriangle(x - 32, y - 40, x - 26, y - 75, x - 14, y - 48);
+      ear1.lineStyle(4, 0x000000);
+      ear1.strokeTriangle(x - 32, y - 40, x - 26, y - 75, x - 14, y - 48);
+      // Black ear tips
+      this.add.circle(x - 26, y - 72, 7, 0x000000);
+
+      const ear2 = this.add.graphics();
+      ear2.fillStyle(0xffff33);
+      ear2.fillTriangle(x + 32, y - 40, x + 26, y - 75, x + 14, y - 48);
+      ear2.lineStyle(4, 0x000000);
+      ear2.strokeTriangle(x + 32, y - 40, x + 26, y - 75, x + 14, y - 48);
+      // Black ear tips
+      this.add.circle(x + 26, y - 72, 7, 0x000000);
+
+      // Lightning bolt tail
+      const tail = this.add.graphics();
+      tail.fillStyle(0xffdd00);
+      tail.beginPath();
+      tail.moveTo(x + 40, y + 6);
+      tail.lineTo(x + 58, y - 6);
+      tail.lineTo(x + 50, y + 10);
+      tail.lineTo(x + 64, y + 14);
+      tail.lineTo(x + 46, y + 18);
+      tail.lineTo(x + 48, y + 30);
+      tail.closePath();
+      tail.fillPath();
+      tail.lineStyle(4, 0x000000);
+      tail.strokePath();
+
+      // Cute little arms
+      this.add.circle(x - 48, y + 10, 14, 0xffff44).setStrokeStyle(4, 0x000000);
+      this.add.circle(x + 48, y + 10, 14, 0xffff44).setStrokeStyle(4, 0x000000);
+
+      // Little feet
+      this.add.ellipse(x - 20, y + 52, 20, 16, 0xffff44).setStrokeStyle(4, 0x000000);
+      this.add.ellipse(x + 20, y + 52, 20, 16, 0xffff44).setStrokeStyle(4, 0x000000);
+    }
+
+    // Eyes - large anime/Pokemon style
+    const eyeY = y - 35;
+    const eyeSpacing = 22;
+
+    // Left eye
+    const leftEyeWhite = this.add.ellipse(x - eyeSpacing, eyeY, 24, 28, 0xffffff);
+    leftEyeWhite.setStrokeStyle(3, 0x000000);
+    const leftPupil = this.add.ellipse(x - eyeSpacing, eyeY + 2, 14, 18, 0x000000);
+    const leftShine1 = this.add.circle(x - eyeSpacing + 4, eyeY - 5, 5, 0xffffff);
+    const leftShine2 = this.add.circle(x - eyeSpacing + 6, eyeY - 2, 3, 0xffffff);
+
+    // Right eye
+    const rightEyeWhite = this.add.ellipse(x + eyeSpacing, eyeY, 24, 28, 0xffffff);
+    rightEyeWhite.setStrokeStyle(3, 0x000000);
+    const rightPupil = this.add.ellipse(x + eyeSpacing, eyeY + 2, 14, 18, 0x000000);
+    const rightShine1 = this.add.circle(x + eyeSpacing + 4, eyeY - 5, 5, 0xffffff);
+    const rightShine2 = this.add.circle(x + eyeSpacing + 6, eyeY - 2, 3, 0xffffff);
+
+    // Mouth - happy expression
+    const mouth = this.add.graphics();
+    mouth.lineStyle(4, 0x000000);
+    mouth.arc(x, y - 15, 18, 0.3, Math.PI - 0.3);
+    mouth.strokePath();
+
+    // Cheek marks/blush
+    this.add.ellipse(x - 45, y - 20, 12, 8, 0xff6666, 0.5);
+    this.add.ellipse(x + 45, y - 20, 12, 8, 0xff6666, 0.5);
+
+    // Label with retro pixel font style
+    const labelText = isPlayer ? `Your ${monster.type}` : `${monster.name}${monster.aiGenerated ? ' ✨' : ''}`;
+    const label = this.add.text(x, y + 95, labelText, {
+      fontSize: '18px',
+      fontFamily: 'Orbitron',
+      fontStyle: 'bold',
+      color: monster.aiGenerated ? '#ffaa00' : '#00ffff',
+      stroke: '#000000',
+      strokeThickness: 4
+    }).setOrigin(0.5);
+
+    // Store references
+    if (isPlayer) {
+      this.playerSprite = leftEyeWhite; // Using eye as reference for animations
+      this.playerGlow = outerGlow;
+      this.playerIcon = leftPupil;
+      this.playerLabel = label;
+    } else {
+      this.opponentSprite = rightEyeWhite;
+      this.opponentGlow = outerGlow;
+      this.opponentIcon = rightPupil;
+      this.opponentLabel = label;
+    }
+  }
+
+  setupHealthBars() {
+    // Player health bar - cyberpunk style
+    this.playerHealthBarBg = this.add.rectangle(230, 410, 220, 26, 0x1a1a3e).setOrigin(0.5);
+    this.playerHealthBarBg.setStrokeStyle(2, 0x00ffff, 0.8);
+    this.playerHealthBar = this.add.rectangle(230, 410, 220, 26, 0x00ff00).setOrigin(0.5);
+    this.playerHealthText = this.add.text(230, 410, `${this.playerMonster.hp}/${this.playerMonster.maxHP}`, {
+      fontSize: '16px',
+      fontFamily: 'Orbitron',
+      fontStyle: 'bold',
+      color: '#00ffff'
+    }).setOrigin(0.5);
+
+    // Opponent health bar - cyberpunk style
+    this.opponentHealthBarBg = this.add.rectangle(670, 410, 220, 26, 0x1a1a3e).setOrigin(0.5);
+    this.opponentHealthBarBg.setStrokeStyle(2, 0xff00ff, 0.8);
+    this.opponentHealthBar = this.add.rectangle(670, 410, 220, 26, 0x00ff00).setOrigin(0.5);
+    this.opponentHealthText = this.add.text(670, 410, `${this.opponentMonster.hp}/${this.opponentMonster.maxHP}`, {
+      fontSize: '16px',
+      fontFamily: 'Orbitron',
+      fontStyle: 'bold',
+      color: '#ff00ff'
+    }).setOrigin(0.5);
+  }
+
+  setupNarrationBox() {
+    // Narration background - cyberpunk style
+    this.narrationBg = this.add.rectangle(450, 490, 850, 90, 0x0a0e27).setOrigin(0.5);
+    this.narrationBg.setStrokeStyle(3, 0x00ffff, 0.8);
+
+    // Add inner glow
+    const innerGlow = this.add.rectangle(450, 490, 845, 85, 0x00ffff, 0.1).setOrigin(0.5);
+
+    this.narrationText = this.add.text(450, 490, '', {
+      fontSize: '17px',
+      fontFamily: 'Orbitron',
+      color: '#00ffff',
+      align: 'center',
+      wordWrap: { width: 820 }
+    }).setOrigin(0.5);
+  }
+
+  setupAbilityButtons() {
+    this.abilityButtons = [];
+
+    this.playerMonster.abilities.forEach((ability, index) => {
+      const x = 280 + (index * 340);
+      const y = 610;
+
+      // Button background - cyberpunk style
+      const button = this.add.rectangle(x, y, 320, 70, 0x1a1a3e)
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .setStrokeStyle(3, 0x00ffff, 0.9);
+
+      // Button glow
+      const buttonGlow = this.add.rectangle(x, y, 315, 65, 0x00ffff, 0.1).setOrigin(0.5);
+
+      // Button text
+      const text = this.add.text(x, y - 12, ability.name, {
+        fontSize: '20px',
+        fontFamily: 'Orbitron',
+        fontStyle: 'bold',
+        color: '#00ffff'
+      }).setOrigin(0.5);
+
+      const desc = this.add.text(x, y + 12, ability.description, {
+        fontSize: '14px',
+        fontFamily: 'Orbitron',
+        color: '#ff00ff'
+      }).setOrigin(0.5);
+
+      const cooldownText = this.add.text(x, y + 30, '', {
+        fontSize: '12px',
+        fontFamily: 'Orbitron',
+        color: '#ff6666'
+      }).setOrigin(0.5);
+
+      button.on('pointerdown', () => this.onAbilityClick(ability, index));
+      button.on('pointerover', () => {
+        button.setFillStyle(0x2a2a5e);
+        button.setStrokeStyle(3, 0xff00ff, 1);
+      });
+      button.on('pointerout', () => {
+        if (!this.cooldowns.player[ability.id]) {
+          button.setFillStyle(0x1a1a3e);
+          button.setStrokeStyle(3, 0x00ffff, 0.9);
+        }
+      });
+
+      this.abilityButtons.push({ button, text, desc, cooldownText, ability });
+    });
+  }
+
+  setupRoundCounter() {
+    this.roundText = this.add.text(450, 95, 'Round 1 - First to 2 wins!', {
+      fontSize: '22px',
+      fontFamily: 'Orbitron',
+      fontStyle: 'bold',
+      color: '#ff00ff',
+      stroke: '#00ffff',
+      strokeThickness: 3
+    }).setOrigin(0.5);
+  }
+
+  showBattleIntro() {
+    const intro = this.aiOpponent.generateBattleIntro(this.opponentMonster, this.opponentPersonality);
+    this.narrationText.setText(intro);
+  }
+
+  onAbilityClick(ability, index) {
+    if (this.waitingForAnimation || !this.isPlayerTurn) return;
+    if (this.cooldowns.player[ability.id] && this.cooldowns.player[ability.id] > 0) return;
+
+    this.waitingForAnimation = true;
+    this.playerLastMove = ability.name;
+
+    // Execute player's move
+    this.executeMove(this.playerMonster, this.opponentMonster, ability, true);
+
+    // Set cooldown
+    this.cooldowns.player[ability.id] = ability.cooldown;
+
+    // After animation, check if round is over
+    this.time.delayedCall(1000, () => {
+      if (this.checkRoundEnd()) return;
+
+      // Opponent's turn
+      this.isPlayerTurn = false;
+      this.executeOpponentTurn();
+    });
+  }
+
+  async executeOpponentTurn() {
+    this.turnNumber++;
+
+    // Decrease cooldowns
+    for (let key in this.cooldowns.opponent) {
+      if (this.cooldowns.opponent[key] > 0) {
+        this.cooldowns.opponent[key]--;
+      }
+    }
+
+    // Get AI decision
+    const context = {
+      opponentMonster: this.opponentMonster,
+      playerMonster: this.playerMonster,
+      personality: this.opponentPersonality,
+      availableAbilities: this.opponentMonster.abilities,
+      cooldowns: this.cooldowns.opponent,
+      playerLastMove: this.playerLastMove,
+      turnNumber: this.turnNumber
+    };
+
+    const aiDecision = await this.aiOpponent.getMove(context);
+
+    // Show narration
+    this.narrationText.setText(aiDecision.narration);
+
+    // Execute opponent's move
+    this.time.delayedCall(800, () => {
+      this.executeMove(this.opponentMonster, this.playerMonster, aiDecision.ability, false);
+
+      // Set cooldown
+      this.cooldowns.opponent[aiDecision.ability.id] = aiDecision.ability.cooldown;
+
+      this.time.delayedCall(1000, () => {
+        if (this.checkRoundEnd()) return;
+
+        // Back to player turn
+        this.isPlayerTurn = true;
+        this.waitingForAnimation = false;
+
+        // Decrease player cooldowns
+        for (let key in this.cooldowns.player) {
+          if (this.cooldowns.player[key] > 0) {
+            this.cooldowns.player[key]--;
+          }
+        }
+
+        this.updateAbilityButtons();
+      });
+    });
+  }
+
+  executeMove(attacker, defender, ability, isPlayer) {
+    const attackerSprite = isPlayer ? this.playerSprite : this.opponentSprite;
+    const attackerGlow = isPlayer ? this.playerGlow : this.opponentGlow;
+    const attackerIcon = isPlayer ? this.playerIcon : this.opponentIcon;
+    const defenderSprite = isPlayer ? this.opponentSprite : this.playerSprite;
+
+    // Attack animation with glow
+    this.tweens.add({
+      targets: [attackerSprite, attackerGlow, attackerIcon],
+      x: isPlayer ? 350 : 550,
+      duration: 200,
+      yoyo: true,
+      ease: 'Power2'
+    });
+
+    this.time.delayedCall(200, () => {
+      if (ability.type === 'DEFENSIVE' && ability.block) {
+        // Apply shield
+        attacker.activeBlock = ability.block;
+        this.flashSprite(attackerSprite, 0x4444ff);
+      } else {
+        // Apply damage
+        let damage = ability.damage || 0;
+
+        // Check if defender has active block
+        if (defender.activeBlock > 0) {
+          const blocked = Math.min(damage, defender.activeBlock);
+          damage -= blocked;
+          defender.activeBlock -= blocked;
+        }
+
+        defender.hp = Math.max(0, defender.hp - damage);
+        this.flashSprite(defenderSprite, 0xff4444);
+      }
+
+      this.updateHealthBars();
+    });
+  }
+
+  flashSprite(sprite, color) {
+    const originalColor = sprite.fillColor;
+    sprite.setFillStyle(color);
+    this.time.delayedCall(150, () => {
+      sprite.setFillStyle(originalColor);
+    });
+  }
+
+  updateHealthBars() {
+    // Player health
+    const playerPercent = this.playerMonster.hp / this.playerMonster.maxHP;
+    this.playerHealthBar.setScale(playerPercent, 1);
+    this.playerHealthBar.x = 230 - (220 * (1 - playerPercent) / 2);
+    this.playerHealthText.setText(`${this.playerMonster.hp}/${this.playerMonster.maxHP}`);
+
+    // Color gradient
+    const playerColor = this.getHealthColor(playerPercent);
+    this.playerHealthBar.setFillStyle(playerColor);
+
+    // Opponent health
+    const opponentPercent = this.opponentMonster.hp / this.opponentMonster.maxHP;
+    this.opponentHealthBar.setScale(opponentPercent, 1);
+    this.opponentHealthBar.x = 670 - (220 * (1 - opponentPercent) / 2);
+    this.opponentHealthText.setText(`${this.opponentMonster.hp}/${this.opponentMonster.maxHP}`);
+
+    const opponentColor = this.getHealthColor(opponentPercent);
+    this.opponentHealthBar.setFillStyle(opponentColor);
+  }
+
+  getHealthColor(percent) {
+    if (percent > 0.6) return 0x00ff00; // Green
+    if (percent > 0.3) return 0xffff00; // Yellow
+    return 0xff0000; // Red
+  }
+
+  updateAbilityButtons() {
+    this.abilityButtons.forEach(({ button, cooldownText, ability }) => {
+      const cooldown = this.cooldowns.player[ability.id] || 0;
+
+      if (cooldown > 0) {
+        button.setFillStyle(0x555555);
+        cooldownText.setText(`Cooldown: ${cooldown} turn${cooldown > 1 ? 's' : ''}`);
+      } else {
+        button.setFillStyle(0x3a3a5e);
+        cooldownText.setText('Ready');
+      }
+    });
+  }
+
+  checkRoundEnd() {
+    if (this.playerMonster.hp <= 0 || this.opponentMonster.hp <= 0) {
+      const winner = this.playerMonster.hp > 0 ? 'player' : 'opponent';
+      this.endRound(winner);
+      return true;
+    }
+    return false;
+  }
+
+  endRound(winner) {
+    this.roundsWon[winner]++;
+
+    const winnerName = winner === 'player' ? `Your ${this.playerMonster.type}` : this.opponentMonster.name;
+    this.narrationText.setText(`${winnerName} wins this round!`);
+
+    this.roundText.setText(`Rounds Won - You: ${this.roundsWon.player} | ${this.opponentMonster.name}: ${this.roundsWon.opponent}`);
+
+    // Victory animation
+    const winnerSprite = winner === 'player' ? this.playerSprite : this.opponentSprite;
+    this.tweens.add({
+      targets: winnerSprite,
+      scale: 1.3,
+      duration: 300,
+      yoyo: true,
+      repeat: 2
+    });
+
+    // Check if battle is over (best of 3)
+    if (this.roundsWon.player === 2 || this.roundsWon.opponent === 2) {
+      this.time.delayedCall(2000, () => this.endBattle(winner));
+    } else {
+      // Reset for next round
+      this.time.delayedCall(2000, () => this.resetRound());
+    }
+  }
+
+  resetRound() {
+    this.playerMonster.hp = this.playerMonster.maxHP;
+    this.opponentMonster.hp = this.opponentMonster.maxHP;
+    this.playerMonster.activeBlock = 0;
+    this.opponentMonster.activeBlock = 0;
+    this.cooldowns = { player: {}, opponent: {} };
+    this.isPlayerTurn = true;
+    this.waitingForAnimation = false;
+    this.playerLastMove = null;
+
+    this.updateHealthBars();
+    this.updateAbilityButtons();
+    this.narrationText.setText('Next round begins!');
+  }
+
+  endBattle(winner) {
+    const summary = this.aiOpponent.generateBattleSummary(
+      winner,
+      this.opponentPersonality,
+      this.playerMonster,
+      this.opponentMonster
+    );
+
+    // Create victory/defeat screen - cyberpunk style
+    const overlay = this.add.rectangle(450, 350, 900, 700, 0x0a0e27, 0.95);
+
+    const resultText = winner === 'player' ? 'VICTORY!' : 'DEFEAT!';
+    const resultColor = winner === 'player' ? '#00ff00' : '#ff0000';
+    const resultGlow = winner === 'player' ? '#00ffff' : '#ff00ff';
+
+    const mainText = this.add.text(450, 220, resultText, {
+      fontSize: '72px',
+      fontFamily: 'Orbitron',
+      fontStyle: '900',
+      color: resultColor,
+      stroke: resultGlow,
+      strokeThickness: 7
+    }).setOrigin(0.5);
+
+    // Add pulsing effect to result text
+    this.tweens.add({
+      targets: mainText,
+      scale: 1.1,
+      duration: 600,
+      yoyo: true,
+      repeat: -1
+    });
+
+    this.add.text(450, 320, summary, {
+      fontSize: '19px',
+      fontFamily: 'Orbitron',
+      color: '#00ffff',
+      align: 'center',
+      wordWrap: { width: 700 }
+    }).setOrigin(0.5);
+
+    // Play Again button - cyberpunk style
+    const playAgainBtn = this.add.rectangle(450, 430, 220, 55, 0x1a1a3e)
+      .setInteractive({ useHandCursor: true })
+      .setStrokeStyle(3, 0x00ffff, 0.9);
+
+    this.add.rectangle(450, 430, 215, 50, 0x00ffff, 0.1);
+
+    this.add.text(450, 430, 'Play Again', {
+      fontSize: '22px',
+      fontFamily: 'Orbitron',
+      fontStyle: 'bold',
+      color: '#00ffff'
+    }).setOrigin(0.5);
+
+    playAgainBtn.on('pointerdown', () => {
+      this.scene.start('MenuScene');
+    });
+
+    playAgainBtn.on('pointerover', () => {
+      playAgainBtn.setFillStyle(0x2a2a5e);
+      playAgainBtn.setStrokeStyle(3, 0xff00ff, 1);
+    });
+    playAgainBtn.on('pointerout', () => {
+      playAgainBtn.setFillStyle(0x1a1a3e);
+      playAgainBtn.setStrokeStyle(3, 0x00ffff, 0.9);
+    });
+
+    // Main Menu button - cyberpunk style
+    const menuBtn = this.add.rectangle(450, 510, 220, 55, 0x1a1a3e)
+      .setInteractive({ useHandCursor: true })
+      .setStrokeStyle(3, 0xff00ff, 0.9);
+
+    this.add.rectangle(450, 510, 215, 50, 0xff00ff, 0.1);
+
+    this.add.text(450, 510, 'Main Menu', {
+      fontSize: '22px',
+      fontFamily: 'Orbitron',
+      fontStyle: 'bold',
+      color: '#ff00ff'
+    }).setOrigin(0.5);
+
+    menuBtn.on('pointerdown', () => {
+      this.scene.start('MenuScene');
+    });
+
+    menuBtn.on('pointerover', () => {
+      menuBtn.setFillStyle(0x2a2a5e);
+      menuBtn.setStrokeStyle(3, 0x00ffff, 1);
+    });
+    menuBtn.on('pointerout', () => {
+      menuBtn.setFillStyle(0x1a1a3e);
+      menuBtn.setStrokeStyle(3, 0xff00ff, 0.9);
+    });
+  }
+}
