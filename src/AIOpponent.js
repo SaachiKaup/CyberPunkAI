@@ -104,18 +104,19 @@ export class AIOpponent {
   chooseAggressively(abilities, monster) {
     const hpPercent = monster.hp / monster.maxHP;
 
-    // Even aggressive AI will defend when critically low (< 25%)
-    if (hpPercent < 0.25) {
+    // Only defend when critically low (< 20%) and rarely
+    if (hpPercent < 0.2) {
       const defensive = abilities.find(a => a.type === 'DEFENSIVE');
-      if (defensive && Math.random() < 0.6) return defensive; // 60% chance to defend when critical
+      if (defensive && Math.random() < 0.4) return defensive; // 40% chance to defend when critical
     }
 
-    // Prioritize special/high damage abilities
-    const specials = abilities.filter(a => a.type === 'SPECIAL' || (a.damage && a.damage >= 30));
+    // Prioritize special/high damage abilities more aggressively
+    const specials = abilities.filter(a => a.type === 'SPECIAL' || (a.damage && a.damage >= 25));
     if (specials.length > 0) {
       return specials[Math.floor(Math.random() * specials.length)];
     }
 
+    // Always pick highest damage available
     return abilities.reduce((highest, current) => {
       const currentDmg = current.damage || 0;
       const highestDmg = highest.damage || 0;
@@ -128,22 +129,22 @@ export class AIOpponent {
     const opponentHpPercent = opponentMonster.hp / opponentMonster.maxHP;
     const playerHpPercent = playerMonster.hp / playerMonster.maxHP;
 
-    // Defend more frequently when at risk
-    if (opponentHpPercent < 0.5) {
-      const defensive = abilities.find(a => a.type === 'DEFENSIVE');
-      if (defensive && Math.random() < 0.7) return defensive; // 70% chance to defend when < 50% HP
-    }
-
-    // If player is low and AI is healthy, go for high damage to finish
-    if (playerHpPercent < 0.4 && opponentHpPercent > 0.5) {
-      const highDamage = abilities.filter(a => a.damage && a.damage >= 30);
+    // If player is low, finish them off!
+    if (playerHpPercent < 0.5) {
+      const highDamage = abilities.filter(a => a.damage && a.damage >= 25);
       if (highDamage.length > 0) {
         return highDamage[Math.floor(Math.random() * highDamage.length)];
       }
     }
 
-    // Otherwise pick medium damage ability or mix it up
-    const offensive = abilities.filter(a => a.type !== 'DEFENSIVE');
+    // Defend when at risk but less often
+    if (opponentHpPercent < 0.3) {
+      const defensive = abilities.find(a => a.type === 'DEFENSIVE');
+      if (defensive && Math.random() < 0.5) return defensive; // 50% chance to defend when < 30% HP
+    }
+
+    // Otherwise pick good damage ability
+    const offensive = abilities.filter(a => a.damage && a.damage >= 20);
     if (offensive.length > 0) {
       return offensive[Math.floor(Math.random() * offensive.length)];
     }
@@ -156,43 +157,45 @@ export class AIOpponent {
     const opponentHpPercent = opponentMonster.hp / opponentMonster.maxHP;
     const playerHpPercent = playerMonster.hp / playerMonster.maxHP;
 
-    if (!playerLastMove) {
-      // Start with moderate damage
-      const moderate = abilities.filter(a => a.damage && a.damage >= 20 && a.damage <= 30);
-      if (moderate.length > 0) {
-        return moderate[Math.floor(Math.random() * moderate.length)];
-      }
-      return abilities[Math.floor(Math.random() * abilities.length)];
-    }
-
-    // Defend if player seems to be going aggressive
-    if (playerLastMove.includes('Blast') || playerLastMove.includes('Rush') || playerLastMove.includes('Dash')) {
-      if (opponentHpPercent < 0.6) {
-        const defensive = abilities.find(a => a.type === 'DEFENSIVE');
-        if (defensive && Math.random() < 0.6) return defensive;
-      }
-    }
-
-    // Counter defensive play with high damage
-    if (playerLastMove.includes('Shield') || playerLastMove.includes('Block')) {
-      const highDamage = abilities.filter(a => a.type === 'SPECIAL' || (a.damage && a.damage >= 35));
-      if (highDamage.length > 0) {
-        return highDamage[Math.floor(Math.random() * highDamage.length)];
-      }
-    }
-
-    // If player is low HP, finish them
-    if (playerHpPercent < 0.35) {
+    // If player is low HP, finish them aggressively!
+    if (playerHpPercent < 0.5) {
       const finishing = abilities.filter(a => a.damage && a.damage >= 25);
       if (finishing.length > 0) {
         return finishing[Math.floor(Math.random() * finishing.length)];
       }
     }
 
-    // Default: pick a good offensive ability
+    if (!playerLastMove) {
+      // Start with high damage
+      const highDamage = abilities.filter(a => a.damage && a.damage >= 25);
+      if (highDamage.length > 0) {
+        return highDamage[Math.floor(Math.random() * highDamage.length)];
+      }
+      return abilities[Math.floor(Math.random() * abilities.length)];
+    }
+
+    // Counter defensive play with maximum damage
+    if (playerLastMove.includes('Shield') || playerLastMove.includes('Block')) {
+      const highDamage = abilities.filter(a => a.type === 'SPECIAL' || (a.damage && a.damage >= 30));
+      if (highDamage.length > 0) {
+        return highDamage[Math.floor(Math.random() * highDamage.length)];
+      }
+    }
+
+    // Only defend when critically low
+    if (playerLastMove.includes('Blast') || playerLastMove.includes('Rush') || playerLastMove.includes('Dash')) {
+      if (opponentHpPercent < 0.25) {
+        const defensive = abilities.find(a => a.type === 'DEFENSIVE');
+        if (defensive && Math.random() < 0.4) return defensive;
+      }
+    }
+
+    // Default: pick highest damage offensive ability
     const offensive = abilities.filter(a => a.damage && a.damage > 0);
     if (offensive.length > 0) {
-      return offensive[Math.floor(Math.random() * offensive.length)];
+      return offensive.reduce((highest, current) => {
+        return (current.damage || 0) > (highest.damage || 0) ? current : highest;
+      }, offensive[0]);
     }
 
     return abilities[0];
