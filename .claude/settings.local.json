@@ -9,7 +9,10 @@
       "Bash(curl -X GET https://zoazeihbe54bgbw7kf34xwsq.agents.do-ai.run)",
       "Bash(curl https://zoazeihbe54bgbw7kf34xwsq.agents.do-ai.run/openapi.json)",
       "Bash(curl -X POST https://zoazeihbe54bgbw7kf34xwsq.agents.do-ai.run/api/v1/chat/completions )",
-      "Bash(npm run dev:all:*)"
+      "Bash(npm run dev:all:*)",
+      "Bash(curl -X POST https://zoazeihbe54bgbw7kf34xwsq.agents.do-ai.run/api/v1/chat/completions -H \"Content-Type: application/json\" -d '{\"\"messages\"\": [{\"\"role\"\": \"\"user\"\", \"\"content\"\": \"\"Generate a unique fire-type monster name\"\"}], \"\"max_tokens\"\": 50}')",
+      "Bash(curl -X POST http://localhost:3001/api/generate-monster -H \"Content-Type: application/json\" -d '{\"\"monsterType\"\": \"\"STRIKER\"\"}')",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

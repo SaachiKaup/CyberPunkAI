@@ -5,8 +5,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const AI_ENDPOINT = 'https://zoazeihbe54bgbw7kf34xwsq.agents.do-ai.run/api/v1/chat/completions';
-const USE_AI = false; // Set to true when you have API credentials
+const AI_ENDPOINT = 'https://zoazeihbe54bgbw7kf34xwsq.agents.do-ai.run';
+const AI_TOKEN = 'oY9S2cNBumrtrR7oJfzofirYxlAOA31I';
+const USE_AI = true; // Enabled to use DigitalOcean AI
 
 // Fallback monster generator using local logic
 function generateFallbackMonster(monsterType) {
@@ -116,10 +117,11 @@ Return ONLY valid JSON in this exact format:
   ]
 }`;
 
-    const response = await fetch(AI_ENDPOINT, {
+    const response = await fetch(`${AI_ENDPOINT}/api/v1/chat/completions`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AI_TOKEN}`
       },
       body: JSON.stringify({
         messages: [
@@ -134,10 +136,18 @@ Return ONLY valid JSON in this exact format:
     });
 
     if (!response.ok) {
-      throw new Error(`AI API error: ${response.status}`);
+      const errorData = await response.json();
+      console.log('DigitalOcean AI API Error:', response.status, errorData);
+
+      if (response.status === 401 || response.status === 403) {
+        console.log('Authentication required for DigitalOcean AI. Add Bearer token to enable.');
+      }
+
+      throw new Error(`AI API error: ${response.status} - ${JSON.stringify(errorData)}`);
     }
 
     const data = await response.json();
+    console.log('DigitalOcean AI Response:', data);
     const aiResponse = data.choices[0].message.content;
 
     // Try to parse JSON from the response
